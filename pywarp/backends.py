@@ -1,23 +1,48 @@
+from abc import ABC, abstractmethod
+
 from .credentials import Credential
 
-class CredentialStorageBackend:
-    def __init__(self):
-        raise NotImplementedError("Implementers should subclass CredentialStorageBackend and pass the subclass instance"
-                                  " when instantiating RelyingPartyManager.")
 
-    def get_credential_by_email(self, email):
-        raise NotImplementedError()
+class AbstractStorageBackend(ABC):
+    @abstractmethod
+    def get_credential(self, username) -> Credential:
+        """
 
-    def save_credential_for_user(self, email, credential):
-        raise NotImplementedError()
+        :param username:
+        :return:
+        """
 
-    def save_challenge_for_user(self, email, challenge, type):
-        raise NotImplementedError()
+    @abstractmethod
+    def save_credential(self, username, credential, **user_extra):
+        """
 
-    def get_challenge_for_user(self, email, type):
-        raise NotImplementedError()
+        :param username:
+        :param credential:
+        :param user_extra:
+        :return:
+        """
 
-class DynamoBackend(CredentialStorageBackend):
+    @abstractmethod
+    def save_challenge(self, username, challenge, challenge_type):
+        """
+
+        :param username:
+        :param challenge:
+        :param challenge_type:
+        :return:
+        """
+
+    @abstractmethod
+    def get_challenge(self, username, challenge_type) -> str:
+        """
+
+        :param username:
+        :param challenge_type:
+        :return:
+        """
+
+
+class DynamoBackend(AbstractStorageBackend):
     def __init__(self):
         import pynamodb.models, pynamodb.attributes
 
@@ -42,18 +67,18 @@ class DynamoBackend(CredentialStorageBackend):
                 setattr(user, k, v)
             user.save()
 
-    def get_credential_by_email(self, email):
-        user = self.UserModel.get(email)
+    def get_credential(self, username):
+        user = self.UserModel.get(username)
         return Credential(credential_id=user.credential_id, credential_public_key=user.credential_public_key)
 
-    def save_credential_for_user(self, email, credential):
-        self.upsert(email, credential_id=credential.id, credential_public_key=bytes(credential.public_key))
+    def save_credential(self, username, credential):
+        self.upsert(username, credential_id=credential.id, credential_public_key=bytes(credential.public_key))
 
-    def save_challenge_for_user(self, email, challenge, type):
-        assert type in {"registration", "authentication"}
-        self.upsert(email, **{type + "_challenge": challenge})
+    def save_challenge(self, username, challenge, challenge_type):
+        assert challenge_type in {"registration", "authentication"}
+        self.upsert(username, **{challenge_type + "_challenge": challenge})
 
-    def get_challenge_for_user(self, email, type):
-        assert type in {"registration", "authentication"}
-        user = self.UserModel.get(email)
-        return getattr(user, type + "_challenge")
+    def get_challenge(self, username, challenge_type):
+        assert challenge_type in {"registration", "authentication"}
+        user = self.UserModel.get(username)
+        return getattr(user, challenge_type + "_challenge")
